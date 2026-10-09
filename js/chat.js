@@ -134,7 +134,7 @@ export async function renderChat(v, ctx) {
     input.focus();
   }
 
-  const PROVIDER_NAME = { gemini: 'Google Gemini (חינם)', claude: 'Claude' };
+  const PROVIDER_NAME = { gemini: 'Google Gemini', claude: 'Claude', pollinations: 'Pollinations (חינם, בלי מפתח)' };
 
   // force = open the settings even when a key is already saved
   async function checkStatus(force = false, note = null) {
@@ -144,7 +144,7 @@ export async function renderChat(v, ctx) {
     if (st.ready && !force) { fill(setup); return true; }
     if (st.public) {
       fill(setup, st.ready ? null : h('div', { class: 'card chat-setup' },
-        h('h3', {}, 'הצ'אט עם ניק כבוי באתר הזה'),
+        h('h3', {}, 'הצ׳אט עם ניק כבוי באתר הזה'),
         h('p', {}, 'בעל האתר עוד לא חיבר מוח ל-AI. כל שאר האתר עובד כרגיל.')));
       return st.ready;
     }
@@ -166,8 +166,9 @@ export async function renderChat(v, ctx) {
       } else fill(msg, h('div', { class: 'msg bad' }, 'זה לא נראה כמו מפתח. בדוק שהעתקת את כולו.'));
     };
     const pv = st.providers || {};
-    const switcher = pv.gemini && pv.claude ? h('div', { class: 'row' }, 'עונה דרך:',
-      ['gemini', 'claude'].map((k) => h('button', {
+    const avail = ['pollinations', 'gemini', 'claude'].filter((k) => pv[k]);
+    const switcher = avail.length > 1 ? h('div', { class: 'row' }, 'עונה דרך:',
+      avail.map((k) => h('button', {
         class: 'btn small' + (st.provider === k ? ' primary' : ''),
         onclick: async () => { await post({ provider: k }); checkStatus(true); },
       }, PROVIDER_NAME[k]))) : null;
