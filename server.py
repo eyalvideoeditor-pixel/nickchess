@@ -129,10 +129,11 @@ def claude_available():
 
 
 def chat_status():
-    providers = {"gemini": bool(gemini_key()), "claude": claude_available()}
+    # Pollinations needs no key at all, so the chat always works; a Gemini/Claude key gives better answers
+    providers = {"gemini": bool(gemini_key()), "claude": claude_available(), "pollinations": True}
     chosen = load_secrets().get("provider")
     if not providers.get(chosen):
-        chosen = "gemini" if providers["gemini"] else "claude" if providers["claude"] else None
+        chosen = "gemini" if providers["gemini"] else "claude" if providers["claude"] else "pollinations"
     if chosen:
         return {"ready": True, "provider": chosen, "providers": providers, "public": PUBLIC}
     return {"ready": False, "reason": "key", "providers": providers, "public": PUBLIC}
@@ -159,6 +160,36 @@ def chat_allowed(ip):
 
 # Free tier: the "latest Flash" alias follows Google's newest free Flash model; the rest are fallbacks.
 GEMINI_MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-flash-latest"]
+
+
+def pollinations_stream(system, messages, write):
+    """Free, no key (pollinations.ai, OpenAI-compatible). Errors become [[ERR:...]] markers."""
+    body = json.dumps({"model": "openai", "stream": True,
+                       "messages": [{"role": "system", "content": system}] + messages}).encode("utf-8")
+    req = urllib.request.Request("https://text.pollinations.ai/openai", data=body, method="POST",
+                                 headers={"Content-Type": "application/json", "User-Agent": UA})
+    wrote = False
+    try:
+        with urllib.request.urlopen(req, timeout=120) as res:
+            for raw in res:
+                line = raw.decode("utf-8", "ignore").strip()
+                if not line.startswith("data:") or line == "data: [DONE]":
+                    continue
+                try:
+                    chunk = json.loads(line[5:])
+                except ValueError:
+                    continue
+                for choice in chunk.get("choices", []):
+                    text = (choice.get("delta") or {}).get("content")
+                    if text:
+                        write(text)
+                        wrote = True
+        if not wrote:
+            write("[[ERR:api:500]]")
+    except urllib.error.HTTPError as e:
+        write("[[ERR:rate]]" if e.code in (402, 429) else f"[[ERR:api:{e.code}]]")
+    except (urllib.error.URLError, TimeoutError, OSError):
+        write("[[ERR:cut]]" if wrote else "[[ERR:net]]")
 
 
 def gemini_stream(key, system, messages, write):
@@ -304,7 +335,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if PUBLIC:
             return self.send_json(403, {"error": "public"})
         data = load_secrets()
-        if body.get("provider") in ("gemini", "claude") and not body.get("key"):
+        if body.get("provider") in ("gemini", "claude", "pollinations") and not body.get("key"):
             data["provider"] = body["provider"]  # just switch between saved keys
         else:
             key = str(body.get("key") or "").strip()
@@ -340,9 +371,25 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(text.encode("utf-8"))
             self.wfile.flush()
 
-        if status["provider"] == "gemini":
+        if status["provider"] in ("gemini", "pollinations"):
             try:
-                gemini_stream(gemini_key(), system, messages, write)
+                if status["provider"] == "gemini":
+                    # a bad key / used-up quota before any text: answer through Pollinations instead
+                    sent = []
+                    failed = []
+
+                    def gwrite(text):
+                        if not sent and text.startswith("[[ERR:") and "cut" not in text:
+                            failed.append(text)
+                            return
+                        sent.append(text)
+                        write(text)
+
+                    gemini_stream(gemini_key(), system, messages, gwrite)
+                    if failed:
+                        pollinations_stream(system, messages, write)
+                else:
+                    pollinations_stream(system, messages, write)
             except (BrokenPipeError, ConnectionResetError):
                 pass
             return
