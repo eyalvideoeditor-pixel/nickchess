@@ -4,6 +4,7 @@ import { Board } from './board.js';
 import { Chess, moveToUci } from './chessutil.js';
 import { OPENINGS, OPENING_ORDER, lineProgress, lineStatus } from './openings-data.js';
 import { nickSays } from './nick.js';
+import { quip } from './quips.js';
 import { shuffle } from './analysis.js';
 
 const sideHe = (c) => (c === 'w' ? 'לבן' : 'שחור');
@@ -146,7 +147,7 @@ function renderLearn(v, key, lineId, ctx) {
     if (cur < n && cur > 0) board.arrows([]);
     if (cur === 0) {
       nick.setContent([h('p', {}, h('b', {}, line.name)),
-        h('p', {}, `בוא נלמד את הקו הזה. אתה משחק ב${sideHe(op.side)}. לחץ ▶ (או חץ ימינה) כדי לראות כל מהלך ולמה משחקים אותו.`)], speak, 'happy');
+        h('p', {}, `בוא נלמד את הקו הזה. אתה משחק ב${sideHe(op.side)}. לחץ ▶ (או חץ ימינה) כדי לראות כל מהלך ולמה משחקים אותו.`), h('p', { class: 'quip' }, quip('opening'))], speak, 'happy');
     } else {
       const i = cur - 1;
       const color = i % 2 === 0 ? 'w' : 'b';
@@ -155,7 +156,7 @@ function renderLearn(v, key, lineId, ctx) {
         h('div', { class: 'learn-move' }, h('span', { dir: 'ltr' }, `${Math.floor(i / 2) + 1}${i % 2 === 0 ? '.' : '...'} ${item.sans[i]}`),
           h('span', { class: 'chip small' }, mine ? 'המהלך שלך' : 'היריב')),
         h('p', {}, item.notes[i]),
-        cur === n ? h('p', {}, h('b', {}, 'זה סוף הקו! עכשיו נסה לשחק אותו מהזיכרון.')) : null,
+        cur === n ? h('p', {}, h('b', {}, 'זה סוף הקו! עכשיו נסה לשחק אותו מהזיכרון.'), ' ', quip('opening')) : null,
       ], speak, cur === n ? 'excited' : mine ? 'happy' : 'thinking');
     }
     moves.querySelectorAll('.mv').forEach((el) => el.classList.toggle('cur', Number(el.dataset.i) === cur - 1));

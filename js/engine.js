@@ -69,7 +69,8 @@ class EngineWorker {
 export class EnginePool {
   constructor(size) {
     const cores = navigator.hardwareConcurrency || 4;
-    this.size = size || Math.max(1, Math.min(6, cores - 1));
+    const phone = /Android|iPhone|iPad/i.test(navigator.userAgent) || (navigator.deviceMemory || 8) <= 4;
+    this.size = size || Math.max(1, Math.min(phone ? 3 : 6, cores - 1));
     this.workers = [];
     this.idle = [];
     this.queue = [];

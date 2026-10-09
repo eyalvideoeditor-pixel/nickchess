@@ -8,6 +8,7 @@ import { themeName, ERROR_TYPE_LABEL } from './content.js';
 import { recordPuzzle, recordDrill, progress } from './puzzles.js';
 import { nickSays, textOf, voice } from './nick.js';
 import { recordLine } from './openings-data.js';
+import { maybeQuip, quip } from './quips.js';
 
 const BC_KEY = 'ct_blunder_check';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -125,7 +126,7 @@ export class Session {
     const t0 = Date.now();
     this._tick = setInterval(() => {
       const s = Math.floor((Date.now() - t0) / 1000);
-      if (s >= 75 && !this.state.done && !this.state.tired) { this.state.tired = true; this.nick.setMood('tired'); }
+      if (s >= 75 && !this.state.done && !this.state.tired) { this.state.tired = true; this.nick.setMood('tired'); if (!this.feedback.textContent) fill(this.feedback, h('div', { class: 'quip' }, quip('tired'))); }
       this.timer.textContent = ` ⏱ ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
     }, 500);
     if (item.kind === 'puzzle') this._loadPuzzle(item);
@@ -190,8 +191,11 @@ export class Session {
 
   // mood follows the kind of message unless given: good -> happy, bad -> sad, ...
   say(msg, cls = '', { speak = true, withPrompt = false, mood = null } = {}) {
-    fill(this.feedback, h('div', { class: 'msg ' + cls }, msg));
     const m = mood || { good: 'happy', bad: 'sad', info: 'calm', muted: 'thinking' }[cls] || 'calm';
+    const kind = cls === 'good' ? (m === 'excited' ? 'great' : 'good') : cls === 'bad' ? (m === 'hungry' ? 'hungry' : 'bad')
+      : m === 'thinking' && cls !== 'muted' ? 'thinking' : null;
+    const extra = kind ? maybeQuip(kind, kind === 'great' ? 0.7 : 0.4) : '';
+    fill(this.feedback, h('div', { class: 'msg ' + cls }, msg, extra ? h('div', { class: 'quip' }, extra) : null));
     if (speak) this.nick.say((withPrompt ? textOf(this.prompt) : '') + textOf(this.feedback), m);
     else this.nick.setMood(m);
   }

@@ -536,3 +536,99 @@ code { background: var(--surface-2); border: 1px solid var(--border); border-rad
 .provider-opt.recommended { border-color: rgba(139, 195, 74, .55); }
 .provider-opt ol { margin: 6px 0; padding-inline-start: 20px; }
 .provider-opt p { margin: 4px 0 0; }
+
+.quip { margin-top: 6px; color: var(--gold); font-style: italic; font-size: .93em; }
+
+/* ---------- phones & small screens ---------- */
+html, body { overflow-x: hidden; }
+#nav .l-short { display: none; }
+.viewer, .session, .chat-layout, .grid2 { min-width: 0; }
+.card, .side, .chat-card, .chat-side { min-width: 0; }
+select, input, textarea { max-width: 100%; }
+.voice-box select { width: 100%; }
+.cg-wrap { touch-action: none; }
+button, .btn, a { -webkit-tap-highlight-color: transparent; }
+
+@media (max-width: 960px) {
+  .viewer, .session, .chat-layout { grid-template-columns: minmax(0, 1fr); }
+  .grid2, .drills, .how { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 640px) {
+  body { font-size: 15px; }
+  .top { padding: 8px 10px; gap: 8px; backdrop-filter: none; background: var(--bg); }
+  .logo { font-size: 1rem; }
+  .logo-mark { font-size: 1.2rem; }
+  #user-chip .uname { font-size: 0; gap: 0; }
+  #user-chip .uname img { width: 28px; height: 28px; }
+  #nav {
+    order: 3; width: 100%; flex: none; display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 4px; overflow: visible;
+  }
+  #nav a { padding: 7px 2px; text-align: center; font-size: .84rem; border-radius: 10px; background: var(--surface); }
+  #nav a.active { background: var(--accent); }
+  #nav .l-full { display: none; }
+  #nav .l-short { display: inline; }
+  .view { padding: 14px 12px 28px; }
+  h2 { font-size: 1.3rem; }
+  .card { padding: 14px; border-radius: 12px; }
+  .page-head { margin-bottom: 12px; }
+  .row-between { align-items: flex-start; }
+  .page-head .row .btn { padding: 8px 12px; font-size: .9rem; }
+  .btn.big { padding: 11px 18px; font-size: 1rem; }
+
+  /* home */
+  .hero { gap: 16px; padding: 4px 0 18px; }
+  .hero h1 { font-size: 1.8rem; }
+  .hero-nick { max-height: 230px; max-width: 200px; }
+  .search .row { flex-wrap: nowrap; }
+  .search .row select { min-width: 0; font-size: .85rem; padding: 10px 8px; }
+
+  /* Nick */
+  .nick { gap: 8px; }
+  .nick-avatar { width: 56px; height: 56px; border-radius: 13px; }
+  .nick-pic { border-radius: 10px; }
+  .nick-lg .nick-avatar { width: 68px; height: 68px; }
+  .nick-bubble { padding: 10px 12px; font-size: .95rem; }
+  .nick-fx { font-size: 18px; top: -8px; inset-inline-end: -8px; }
+
+  /* boards, sessions, review */
+  .viewer .board-col, .session .board-col { max-width: 100%; }
+  .session .board-col { max-width: min(100%, calc(100vh - 330px)); min-width: 260px; }
+  .side { gap: 10px; }
+  .side-head { gap: 6px; }
+  .side-stats { font-size: .82rem; }
+  .moves { max-height: 200px; }
+  .rv-row { grid-template-columns: 1fr 54px 54px; }
+  .graph svg { height: 80px; }
+  .eval-bar { width: 16px; }
+  .coach-move { font-size: 1.1rem; }
+  .rv-ic.big { width: 38px; height: 38px; font-size: 17px; }
+  .rv-badge { width: 8%; height: 8%; }
+  .actions .safe-btn, .actions .blunder-btn { padding: 12px 8px; }
+
+  /* lists & grids */
+  .tiles { gap: 8px; }
+  .tile .tv { font-size: 1.5rem; }
+  .barrow { grid-template-columns: 110px 1fr 38px; gap: 6px; font-size: .88rem; }
+  .theme-grid, .cat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .worst { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .game-row { gap: 8px; padding: 10px 12px; }
+  .legend { gap: 5px; }
+  .legend-item { font-size: .82rem; padding: 3px 9px 3px 4px; }
+  .opening-card { grid-template-columns: 110px minmax(0, 1fr); gap: 10px; }
+  .opening-card .board-box { max-width: 110px; }
+  .line-card { padding: 12px; }
+
+  /* chat */
+  .chat-layout { gap: 12px; }
+  .chat-log { max-height: 52vh; min-height: 200px; }
+  .chat-nick { margin-inline-end: 0; }
+  .chat-msg.user .chat-bubble { max-width: 88%; }
+  .chat-sugg { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .chat-sugg .chip { flex: none; white-space: nowrap; }
+  .chat-input textarea { font-size: 16px; } /* no zoom-in on iPhone */
+  .chat-side .nick-full { max-height: 200px; max-width: 200px; }
+  .mood-test .btn { padding: 5px 9px; font-size: .82rem; }
+  input[type=text], input[type=password], textarea, select { font-size: 16px; }
+}

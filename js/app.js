@@ -13,15 +13,17 @@ import { curated, curatedForTheme, lichessBatch, dailyPuzzle, progress, initRati
 import { renderReviewHome, renderReviewGame } from './review.js';
 import { renderOpenings } from './openings.js';
 import { renderChat } from './chat.js';
+import { quip } from './quips.js';
 import { nickSays, voice, voiceToggle, NICK_FULL } from './nick.js';
 import { OPENINGS, OPENING_ORDER, lineProgress } from './openings-data.js';
 
 const GAME_COUNT = 25;
+const IS_PHONE = matchMedia('(max-width: 640px)').matches || /Android|iPhone|iPad/i.test(navigator.userAgent);
 const DEPTHS = { fast: 12, normal: 15, deep: 18 };
 const DEPTH_LABEL = { fast: 'מהיר', normal: 'רגיל', deep: 'מעמיק' };
 
 const S = {
-  username: null, timeClass: 'all', depthKey: 'normal',
+  username: null, timeClass: 'all', depthKey: IS_PHONE ? 'fast' : 'normal',
   games: [], profile: null, player: null,
   analyzing: false, progress: null, focus: null,
   session: null, returnTo: '#/report',
@@ -201,17 +203,20 @@ function profileText() {
 
 // ---------------- layout ----------------
 
+// [link, label, short label for phones]
 const TABS = [
-  ['#/', 'ניתוח'], ['#/report', 'הדוח שלי'], ['#/games', 'המשחקים'], ['#/review', 'מנתח משחקים'], ['#/train', 'אימון'],
-  ['#/openings', 'פתיחות'], ['#/puzzles', 'חידות מובחרות'], ['#/chat', 'צ׳אט עם ניק 🐶'],
+  ['#/', 'ניתוח', 'ניתוח'], ['#/report', 'הדוח שלי', 'הדוח'], ['#/games', 'המשחקים', 'משחקים'],
+  ['#/review', 'מנתח משחקים', 'מנתח'], ['#/train', 'אימון', 'אימון'], ['#/openings', 'פתיחות', 'פתיחות'],
+  ['#/puzzles', 'חידות מובחרות', 'חידות'], ['#/chat', 'צ׳אט עם ניק 🐶', 'ניק 🐶'],
 ];
 
 function renderNav() {
   const route = location.hash || '#/';
   const base = '#/' + (route.split('/')[1] || '');
   const p = progress();
-  fill($('#nav'), ...TABS.map(([href, label]) =>
-    h('a', { href, class: base === href || (href === '#/games' && base === '#/game') ? 'active' : '' }, label)));
+  fill($('#nav'), ...TABS.map(([href, label, short]) =>
+    h('a', { href, class: base === href || (href === '#/games' && base === '#/game') ? 'active' : '' },
+      h('span', { class: 'l-full' }, label), h('span', { class: 'l-short' }, short))));
   fill($('#user-chip'), 
     S.username ? h('span', { class: 'uname' }, S.player && S.player.avatar ? h('img', { src: S.player.avatar, alt: '' }) : '♟', ' ', S.player ? S.player.name : S.username) : null,
     p.rating ? h('span', { class: 'prating', title: 'דירוג החידות שלך באתר' }, '🧩 ' + p.rating) : null);
@@ -273,7 +278,7 @@ function renderHome(v) {
         h('div', { id: 'progress' })),
       h('div', { class: 'hero-art' },
         h('img', { class: 'nick-full hero-nick', src: NICK_FULL, alt: 'ניק' }),
-        nickSays('הב! אני ניק, המאמן שלך. אני אעבור על המשחקים שלך, אגיד לך מה מפריע לך, ואאמן אותך — עם קול והכל.', { size: 'sm', className: 'hero-bubble', mood: 'happy' }))),
+        nickSays([h('p', {}, quip('hello')), h('p', {}, 'אני אעבור על המשחקים שלך, אגיד לך מה מפריע לך, ואאמן אותך — עם קול והכל.')], { size: 'sm', className: 'hero-bubble', mood: 'happy' }))),
     h('section', { class: 'how' },
       howCard('1', 'ניתוח מנוע', 'כל מהלך שלך נבדק ומסווג: בלנדר, טעות או אי-דיוק — ולמה: כלי תלוי, טקטיקה של היריב, פספוס מט ועוד.'),
       howCard('2', 'אבחון', 'אנחנו מחשבים איזה סוג טעות עלה לך הכי הרבה — לא רק כמה טעויות, אלא כמה נקודות הן עלו.'),

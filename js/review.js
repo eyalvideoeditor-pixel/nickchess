@@ -7,6 +7,7 @@ import {
   Chess, toWhiteCp, winChance, PIECE_VALUE, tryMove, sanOf, pvToSan, formatEval, moveToUci, nullMoveFen,
 } from './chessutil.js';
 import { nickSays } from './nick.js';
+import { maybeQuip } from './quips.js';
 import { errorType } from './analysis.js';
 import { REVIEW, REVIEW_ORDER } from './content.js';
 import { fetchRecentGames, gameFromPgn, parseGameLink, fetchGameByLink } from './chesscom.js';
@@ -357,6 +358,11 @@ function comment(g, i) {
       break;
     default:
   }
+  // a dog line now and then (Nick and his sausages)
+  const QUIP_KIND = { brilliant: 'great', great: 'great', best: 'great', excellent: 'good', good: 'good',
+    inaccuracy: 'bad', mistake: 'bad', blunder: 'bad', miss: 'hungry' };
+  const extra = QUIP_KIND[rv.cls] ? maybeQuip(QUIP_KIND[rv.cls], rv.cls === 'best' ? 0.3 : 0.55) : '';
+  if (extra) out.push(extra);
   // what happened: the position before vs. after, in words
   const wBefore = positionWords(before.cpW), wAfter = positionWords(after.cpW);
   out.push(wBefore === wAfter ? `המצב: ${wAfter}.` : `לפני המהלך: ${wBefore}. עכשיו: ${wAfter}.`);
