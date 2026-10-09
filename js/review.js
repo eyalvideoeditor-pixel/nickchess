@@ -7,7 +7,8 @@ import {
   Chess, toWhiteCp, winChance, PIECE_VALUE, tryMove, sanOf, pvToSan, formatEval, moveToUci, nullMoveFen,
 } from './chessutil.js';
 import { nickSays } from './nick.js';
-import { maybeQuip } from './quips.js';
+import { maybeQuip, quip } from './quips.js';
+import { prefetchSpeech } from './nick.js';
 import { errorType } from './analysis.js';
 import { REVIEW, REVIEW_ORDER } from './content.js';
 import { fetchRecentGames, gameFromPgn, parseGameLink, fetchGameByLink } from './chesscom.js';
@@ -288,6 +289,16 @@ const REVIEW_MOOD = {
   inaccuracy: 'thinking', mistake: 'sad', miss: 'hungry', blunder: 'shocked',
 };
 
+// What Nick says OUT LOUD for a move: only his verdict and one fun line - no move names, no analysis.
+const SPOKEN_KIND = { brilliant: 'great', great: 'great', best: 'good', excellent: 'good', good: 'good', book: 'opening',
+  inaccuracy: 'bad', mistake: 'bad', blunder: 'bad', miss: 'hungry' };
+function spokenLines(g) {
+  return g.plies.map((p, i) => {
+    const list = OPENERS[p.rv.cls];
+    return `${list[i % list.length]} ${quip(SPOKEN_KIND[p.rv.cls] || 'good')}`;
+  });
+}
+
 const OPENERS = {
   brilliant: ['הב הב!! שבותה!', 'וואו! מהלך של אלופים — שבותה!'],
   great: ['ניק! מהלך כזה מגיע לו עצם.', 'ניק! מצאת את המהלך היחיד.'],
@@ -484,8 +495,35 @@ export async function renderReviewGame(v, id, ctx, startPly = 0) {
     classifyReview(g);
   }
   memory.set(g.id, g);
+  await prepareVoice(v, g);
+  if (!location.hash.startsWith('#/review/')) return;
   drawGame(v, g, ctx, startPly);
 }
+
+// Nick records all his lines before the review opens, so every move answers instantly
+async function prepareVoice(v, g) {
+  if (!g.spoken) g.spoken = spokenLines(g);
+  const items = [{ text: INTRO_LINE, mood: 'happy' }, ...g.spoken.map((text, i) => ({ text, mood: REVIEW_MOOD[g.plies[i].rv.cls] || 'calm' }))];
+  const bar = h('div', {});
+  const txt = h('span', {}, 'ניק מתכונן...');
+  let skipped = false;
+  const box = h('div', { class: 'card center review-progress' },
+    h('img', { class: 'nick-full prep-nick', src: 'assets/nick-m-curious-full.webp', alt: 'ניק' }),
+    h('h2', {}, 'ניק מכין את ההערות שלו'),
+    h('p', { class: 'muted' }, 'הוא מקליט מראש מה הוא יגיד על כל מהלך — ככה הוא יענה מיד.'),
+    h('div', { class: 'progress' }, h('div', { class: 'progress-text' }, txt), h('div', { class: 'bar' }, bar)),
+    h('button', { class: 'btn ghost small', onclick: () => { skipped = true; } }, 'דלג'));
+  let shown = false;
+  const timer = setTimeout(() => { shown = true; fill(v, box); }, 250); // no flash when everything is ready already
+  await prefetchSpeech(items, (d, n) => {
+    txt.textContent = `${d} / ${n} משפטים`;
+    bar.style.width = (d / Math.max(n, 1) * 100).toFixed(1) + '%';
+  }, () => skipped || !location.hash.startsWith('#/review/'));
+  clearTimeout(timer);
+  return shown;
+}
+
+const INTRO_LINE = 'היי, אני ניק! עברתי על כל המשחק. לחץ על החץ ואני אגיד לך מה אני חושב על כל מהלך.';
 
 function drawGame(v, g, ctx, startPly) {
   let cur = 0;
@@ -563,7 +601,8 @@ function drawGame(v, g, ctx, startPly) {
       nick.setContent([
         h('p', {}, `היי, אני ניק! עברתי על כל ${n} המהלכים של המשחק.`),
         h('p', {}, 'לחץ ▶ (או חץ ימינה) ואני אגיד לך מה אני חושב על כל מהלך — למה הוא טוב, למה הוא גרוע, ומה קרה.'),
-      ], speak, 'happy');
+      ], false, 'happy');
+      if (speak) nick.say(INTRO_LINE, 'happy');
       fill(coachBtns);
     } else {
       const R = REVIEW[p.rv.cls];
@@ -576,7 +615,8 @@ function drawGame(v, g, ctx, startPly) {
       nick.setContent([
         ...comment(g, cur - 1).map((t) => h('p', {}, t)),
         h('div', { class: 'muted small no-speak', dir: 'rtl' }, 'הערכה: ', h('bdi', {}, formatEval(before.cpW)), ' ← ', h('bdi', {}, formatEval(after.cpW))),
-      ], speak, REVIEW_MOOD[p.rv.cls] || 'calm');
+      ], false, REVIEW_MOOD[p.rv.cls] || 'calm');
+      if (speak) nick.say(g.spoken[cur - 1], REVIEW_MOOD[p.rv.cls] || 'calm');
       fill(coachBtns,
         canFix || (p.rv.cls === 'good' || p.rv.cls === 'excellent') ? h('button', {
           class: 'btn small' + (showingBest ? ' primary' : ''), onclick: () => { showBest = !showBest; show(cur, false); },

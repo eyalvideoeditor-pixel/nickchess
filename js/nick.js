@@ -86,6 +86,38 @@ const talk = (el, on) => {
   if (on) talkingEls.add(el); else talkingEls.delete(el);
 };
 
+/**
+ * Record a list of lines ahead of time: items = [{ text, mood }]. onStep(done, total).
+ * Does nothing (resolves at once) when the voice is off or only the browser voice is available.
+ */
+export async function prefetchSpeech(items, onStep, isCancelled = () => false) {
+  const c = choice();
+  if (!voice.enabled || !c || !c.id.startsWith('neural:')) return false;
+  const id = c.id.slice(7);
+  const urls = [];
+  for (const { text, mood } of items) {
+    const m = MOODS[mood] || MOODS.calm;
+    for (const t of chunks(speakable(text))) urls.push(ttsUrl(t, id, m));
+  }
+  const todo = [...new Set(urls)].filter((u) => !audioCache.has(u));
+  let done = urls.length - todo.length;
+  if (onStep) onStep(done, urls.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < todo.length && !isCancelled()) {
+      const u = todo[next++];
+      try {
+        const r = await fetch(u);
+        if (r.ok) audioCache.set(u, URL.createObjectURL(await r.blob()));
+      } catch { /* that line will stream live instead */ }
+      done++;
+      if (onStep) onStep(done, urls.length);
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  return true;
+}
+
 export const voice = {
   get supported() { return !!synth || neural.length > 0; },
   get available() { return !!choice(); },
@@ -113,10 +145,18 @@ export const voice = {
   },
 };
 
+// recorded speech kept in memory (blob URLs), so prepared lines play instantly
+const audioCache = new Map();
+const ttsUrl = (t, id, m) => `api/tts?v=${encodeURIComponent(id)}&r=${encodeURIComponent(m.rate)}&p=${encodeURIComponent(m.pitch)}&t=${encodeURIComponent(t)}`;
+
 function speakNeural(text, id, m, avatarEl) {
   const token = playing.token;
-  const url = (t) => `api/tts?v=${encodeURIComponent(id)}&r=${encodeURIComponent(m.rate)}&p=${encodeURIComponent(m.pitch)}&t=${encodeURIComponent(t)}`;
-  const queue = chunks(text).map((t) => { const a = new Audio(url(t)); a.preload = 'auto'; return a; });
+  const queue = chunks(text).map((t) => {
+    const u = ttsUrl(t, id, m);
+    const a = new Audio(audioCache.get(u) || u);
+    a.preload = 'auto';
+    return a;
+  });
   const next = (i) => {
     if (token !== playing.token) return;
     if (i >= queue.length) { talk(avatarEl, false); playing.audio = null; return; }

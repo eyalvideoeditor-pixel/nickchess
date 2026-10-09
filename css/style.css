@@ -632,3 +632,5 @@ button, .btn, a { -webkit-tap-highlight-color: transparent; }
   .mood-test .btn { padding: 5px 9px; font-size: .82rem; }
   input[type=text], input[type=password], textarea, select { font-size: 16px; }
 }
+
+.prep-nick { max-height: 220px; max-width: 200px; margin-bottom: 12px; }

@@ -519,7 +519,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def end_headers(self):
         # the engine binary is big and never changes; everything else stays fresh
-        if self.path.startswith("/engine/"):
+        if self.path.startswith("/engine/") or self.path.startswith("/api/tts?"):
             self.send_header("Cache-Control", "public, max-age=604800")
         else:
             self.send_header("Cache-Control", "no-cache")
