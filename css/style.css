@@ -634,3 +634,34 @@ button, .btn, a { -webkit-tap-highlight-color: transparent; }
 }
 
 .prep-nick { max-height: 220px; max-width: 200px; margin-bottom: 12px; }
+
+/* phones: board, arrows and Nick together on one screen (analysis, game viewer, opening lessons) */
+@media (max-width: 640px) {
+  .top { position: static; }
+  .viewer { display: flex; flex-direction: column; gap: 8px; }
+  .viewer > .board-col, .viewer > .side { display: contents; }
+  .viewer .board-with-eval, .viewer .board-col > .board-box { order: 1; width: min(100%, calc(100vh - 290px)); min-width: 240px; align-self: center; }
+  .viewer .nav-btns { order: 2; margin: 2px 0; }
+  .viewer .coach, .viewer .viewer-nick, .viewer .learn-nick, .viewer .move-info { order: 3; }
+  .viewer .err-list { order: 4; }
+  .viewer .graph { order: 5; }
+  .viewer .rv-summary { order: 6; }
+  .viewer .moves { order: 7; }
+  .viewer .coach .nick-bubble, .viewer .viewer-nick .nick-bubble, .viewer .learn-nick .nick-bubble { max-height: 26vh; overflow-y: auto; }
+  .viewer .coach-head { gap: 8px; }
+  .viewer .nav-btns .btn { padding: 8px 16px; font-size: 1rem; }
+}
+
+/* ---------- Tinder-style "safe or blunder?" ---------- */
+.board-box .swipe-hint {
+  position: absolute; top: 14px; z-index: 20; opacity: 0; pointer-events: none;
+  font-size: 1.4rem; font-weight: 900; padding: 6px 14px; border-radius: 10px; border: 3px solid; background: rgba(0, 0, 0, .55);
+}
+.board-box .swipe-hint.right { left: 14px; color: #9be15d; border-color: #9be15d; transform: rotate(-12deg); }
+.board-box .swipe-hint.left { right: 14px; color: #ff6b5e; border-color: #ff6b5e; transform: rotate(12deg); }
+.board-box.swipe-card { cursor: grab; touch-action: pan-y; user-select: none; }
+.board-box.swipe-card .cg-wrap { pointer-events: none; }
+.board-box.swiping { cursor: grabbing; }
+.board-box.fly { transition: transform .26s ease-in; }
+.board-box.back { transition: transform .25s ease-out; }
+.swipe-help { margin-top: 6px; font-weight: 700; color: var(--gold); font-size: .92rem; }

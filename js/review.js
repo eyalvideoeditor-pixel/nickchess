@@ -627,7 +627,11 @@ function drawGame(v, g, ctx, startPly) {
     }
     moves.querySelectorAll('.mv').forEach((el) => el.classList.toggle('cur', Number(el.dataset.i) === cur - 1));
     const curEl = moves.querySelector('.mv.cur');
-    if (curEl) curEl.scrollIntoView({ block: 'nearest' });
+    if (curEl) { // scroll only the move list, never the page
+      const box = curEl.closest('.moves');
+      const top = curEl.offsetTop - box.offsetTop;
+      if (top < box.scrollTop || top + curEl.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = top - box.clientHeight / 2;
+    }
     const cursor = graph.querySelector('.cursor');
     if (cursor) { cursor.setAttribute('x1', xOf(cur)); cursor.setAttribute('x2', xOf(cur)); }
   }

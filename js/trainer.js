@@ -62,7 +62,8 @@ export class Session {
       h('span', { class: 'slider' }), ' מצב בדיקת בלנדר');
     fill(this.root,
       h('div', { class: 'session' },
-        h('div', { class: 'board-col' }, h('div', { class: 'board-box', dir: 'ltr' }, boardEl)),
+        h('div', { class: 'board-col' }, this.boardBox = h('div', { class: 'board-box', dir: 'ltr' }, boardEl,
+          h('div', { class: 'swipe-hint left' }, '💥 בלנדר'), h('div', { class: 'swipe-hint right' }, 'בטוח ✅'))),
         h('div', { class: 'side card' },
           h('div', { class: 'side-head' },
             h('button', { class: 'btn ghost small', onclick: () => this.exit() }, '→ חזרה'),
@@ -71,10 +72,70 @@ export class Session {
           this.nick, this.actions, this.meta,
           h('div', { class: 'side-foot' }, bcToggle))));
     this.board = new Board(boardEl, { onMove: (uci, m) => this._onUserMove(uci, m) });
+    this._setupSwipe();
+  }
+
+  // ---------- Tinder-style swipe for "safe or blunder?": right = safe, left = blunder ----------
+  _setupSwipe() {
+    const box = this.boardBox;
+    const hintL = box.querySelector('.swipe-hint.left'), hintR = box.querySelector('.swipe-hint.right');
+    let x0 = null, y0 = 0, dx = 0, id = null;
+    const paint = () => {
+      box.style.transform = dx ? `translateX(${dx}px) rotate(${dx / 18}deg)` : '';
+      hintR.style.opacity = Math.max(0, Math.min(1, dx / 90));
+      hintL.style.opacity = Math.max(0, Math.min(1, -dx / 90));
+    };
+    box.addEventListener('pointerdown', (e) => {
+      if (!this._swipeOn) return;
+      x0 = e.clientX; y0 = e.clientY; dx = 0; id = e.pointerId;
+      box.setPointerCapture(id);
+      box.classList.add('swiping');
+    });
+    box.addEventListener('pointermove', (e) => {
+      if (x0 === null || e.pointerId !== id) return;
+      dx = e.clientX - x0;
+      if (Math.abs(e.clientY - y0) > Math.abs(dx) * 1.5 && Math.abs(dx) < 20) return; // vertical: leave it
+      paint();
+    });
+    const end = (e) => {
+      if (x0 === null || e.pointerId !== id) return;
+      x0 = null;
+      box.classList.remove('swiping');
+      if (Math.abs(dx) > Math.min(110, box.offsetWidth * 0.28)) this._swipeDecide(dx > 0 ? 'safe' : 'blunder');
+      else { dx = 0; paint(); }
+    };
+    box.addEventListener('pointerup', end);
+    box.addEventListener('pointercancel', end);
+    this._swipeReset = () => { dx = 0; paint(); };
+    this._keySwipe = (e) => {
+      if (!this._swipeOn || !document.body.contains(box)) return;
+      if (e.key === 'ArrowRight') this._swipeDecide('safe');
+      if (e.key === 'ArrowLeft') this._swipeDecide('blunder');
+    };
+    document.addEventListener('keydown', this._keySwipe);
+  }
+
+  _swipeDecide(choice) {
+    if (!this._swipeOn) return;
+    this._swipeOn = false;
+    const box = this.boardBox;
+    const dir = choice === 'safe' ? 1 : -1;
+    box.classList.add('fly');
+    box.style.transform = `translateX(${dir * 120}%) rotate(${dir * 18}deg)`;
+    box.querySelector(choice === 'safe' ? '.swipe-hint.right' : '.swipe-hint.left').style.opacity = 1;
+    setTimeout(() => {
+      box.classList.remove('fly', 'swipe-card'); // the board may be needed for the next step (find the refutation)
+      box.classList.add('back');
+      this._swipeReset();
+      setTimeout(() => box.classList.remove('back'), 260);
+      this._safeAnswer(choice === 'blunder');
+    }, 260);
   }
 
   destroy() {
     clearInterval(this._tick);
+    this._swipeOn = false;
+    if (this._keySwipe) document.removeEventListener('keydown', this._keySwipe);
     voice.stop();
     this.item = null;
     this.board.destroy();
@@ -118,6 +179,8 @@ export class Session {
     const item = this.items[this.i];
     this.item = item;
     this.state = { failed: false, hinted: 0, done: false, busy: false };
+    this._swipeOn = false;
+    this.boardBox.classList.toggle('swipe-card', item.kind === 'safe');
     fill(this.feedback, );
     fill(this.meta, );
     this.confirmBox.classList.add('hidden');
@@ -437,10 +500,12 @@ export class Session {
       h('div', { class: 'turn ' + (it.color === 'w' ? 'white' : 'black') }, `${colorHe(it.color)} שוקל לשחק`),
       h('div', { class: 'muted small' }, it.source === 'puzzle' ? 'מתוך משחק אמיתי ב-Lichess' : `מהמשחק שלך נגד ${it.opp} (מהלך ${it.moveNo})`),
       h('div', { class: 'candidate' }, it.san),
-      h('div', { class: 'muted' }, 'עשה בדיקת בלנדר: שחים, אכילות ואיומים של היריב אחרי המהלך. האם המהלך בטוח?'));
+      h('div', { class: 'muted' }, 'עשה בדיקת בלנדר: שחים, אכילות ואיומים של היריב אחרי המהלך. האם המהלך בטוח?'),
+      h('div', { class: 'swipe-help' }, '👈 גרור את הלוח שמאלה = בלנדר · גרור ימינה = בטוח 👉'));
+    this._swipeOn = true;
     this.setActions(
-      this.btn('✅ בטוח', () => this._safeAnswer(false), 'safe-btn'),
-      this.btn('💥 בלנדר', () => this._safeAnswer(true), 'blunder-btn'));
+      this.btn('👈 💥 בלנדר', () => this._swipeDecide('blunder'), 'blunder-btn'),
+      this.btn('✅ בטוח 👉', () => this._swipeDecide('safe'), 'safe-btn'));
     this.nick.say(textOf(this.prompt), 'warning');
   }
 
