@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>מאמן השחמט שלי</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♞</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="vendor/cg-base.css">
+  <link rel="stylesheet" href="vendor/cg-brown.css">
+  <link rel="stylesheet" href="vendor/cg-cburnett.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    { "imports": { "chessground": "./vendor/chessground.js", "chess.js": "./vendor/chess.js" } }
+  </script>
+</head>
+<body>
+  <header class="top">
+    <a class="logo" href="#/"><span class="logo-mark">♞</span> מאמן השחמט שלי</a>
+    <nav id="nav"></nav>
+    <div id="voice-slot"></div>
+    <div id="user-chip"></div>
+  </header>
+  <main id="view" class="view"></main>
+  <footer class="foot muted small">
+    ניתוח: Stockfish 18 בדפדפן · משחקים: chess.com Public API · חידות: מאגר החידות הפתוח של Lichess (CC0)
+  </footer>
+  <script src="data/top-puzzles.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
