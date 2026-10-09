@@ -121,7 +121,8 @@ def saved_key():
 
 
 def gemini_key():
-    return load_secrets().get("gemini_api_key") or os.environ.get("GEMINI_API_KEY") or None
+    key = load_secrets().get("gemini_api_key") or os.environ.get("GEMINI_API_KEY") or ""
+    return key.strip().strip('"').strip("'") or None  # pasted keys often carry spaces/quotes
 
 
 def claude_available():
@@ -191,6 +192,27 @@ def pollinations_stream(system, messages, write):
         write("[[ERR:rate]]" if e.code in (402, 429) else f"[[ERR:api:{e.code}]]")
     except (urllib.error.URLError, TimeoutError, OSError):
         write("[[ERR:cut]]" if wrote else "[[ERR:net]]")
+
+
+def gemini_diag():
+    """What Google says about the configured key (never returns the key itself)."""
+    key = gemini_key()
+    if not key:
+        return {"key": "missing"}
+    info = {"key": f"{len(key)} chars, starts with {key[:3]}", "spaces": key != key.strip()}
+    body = json.dumps({"contents": [{"role": "user", "parts": [{"text": "hi"}]}]}).encode()
+    req = urllib.request.Request(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
+        data=body, method="POST", headers={"Content-Type": "application/json", "x-goog-api-key": key.strip()})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as res:
+            info["google"] = f"ok {res.status}"
+    except urllib.error.HTTPError as e:
+        err = json.loads(e.read() or b"{}").get("error", {})
+        info["google"] = f"{e.code} {err.get('status')}: {str(err.get('message'))[:200]}"
+    except Exception as e:
+        info["google"] = f"network: {type(e).__name__}"
+    return info
 
 
 def gemini_stream(key, system, messages, write):
@@ -287,6 +309,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/chat/status":
             return self.send_json(200, chat_status())
+        if self.path == "/api/chat/diag":
+            return self.send_json(200, gemini_diag())
         if self.path == "/api/tts/status":
             return self.send_json(200, {"ok": edge_tts is not None, "voices": sorted(TTS_VOICES)})
         if self.path.startswith("/api/tts?"):
