@@ -1,4 +1,4 @@
-import { h, $, fill, store, pct, fmtDate, toast } from './util.js';
+import { h, $, fill, store, pct, fmtDate, toast, fitOnPhone } from './util.js';
 import { getEngine } from './engine.js';
 import { fetchRecentGames, fetchProfile } from './chesscom.js';
 import { analyzeGame, annotateGame, buildProfile, mistakeItems, safetyItems, shuffle, fixItem } from './analysis.js';
@@ -468,7 +468,14 @@ function renderGame(v, path) {
 
   const mineErrors = g.plies.map((p, i) => ({ p, i })).filter(({ p }) => p.mine && (p.cls === 'mistake' || p.cls === 'blunder'));
 
+  let shownOnce = false;
   function show(n, focusMistake = ply !== null) {
+    _show(n, focusMistake);
+    if (shownOnce) fitOnPhone(boardEl.closest('.board-with-eval'), infoNick);
+    shownOnce = true;
+  }
+
+  function _show(n, focusMistake = ply !== null) {
     cur = Math.max(0, Math.min(g.plies.length, n));
     const fen = cur === 0 ? g.initialFen : g.plies[cur - 1].fenAfter;
     board.set(fen, { orientation: orient, lastMove: cur > 0 ? g.plies[cur - 1].uci : null });
@@ -792,7 +799,7 @@ function researchNotes() {
   return h('section', { class: 'card research' },
     h('h3', {}, 'איך מתאמנים נגד בלנדרים? (מה המאמנים ממליצים)'),
     h('ol', {},
-      h('li', {}, h('b', {}, 'בדיקת בלנדר לפני כל מהלך. '), 'דמיין שהמהלך כבר שוחק ובדוק רק את השחים והאכילות של היריב. זה לוקח כמה שניות ותופס את רוב הבלנדרים. ', h('i', {}, 'מצב בדיקת בלנדר'), ' באתר מכריח אותך לעצור ולאשר כל מהלך עד שזה נהיה הרגל.'),
+      h('li', {}, h('b', {}, 'בדיקת בלנדר לפני כל מהלך. '), 'דמיין שהמהלך כבר שוחק ובדוק רק את השחים והאכילות של היריב. זה לוקח כמה שניות ותופס את רוב הבלנדרים. התרגיל ', h('i', {}, '"בטוח או בלנדר?"'), ' מאמן בדיוק את זה.'),
       h('li', {}, h('b', {}, 'מה השתנה במהלך האחרון של היריב? '), 'כל מהלך תוקף משהו, מפסיק להגן על משהו, או שניהם. שאל את זה אחרי כל מהלך שלו.'),
       h('li', {}, h('b', {}, 'להפוך את הלוח. '), 'לפתור עמדות מהצד של היריב — למצוא את המהלך החזק שלו. זה בונה זיהוי מהיר של איומים (התרגיל "הפוך את הלוח").'),
       h('li', {}, h('b', {}, 'חידות כל יום, 15–20 דקות. '), 'הרבה בלנדרים הם מוטיבים טקטיים שלא זיהית. חידות "כלי תלוי" ו"מהלך הגנה" מאמנות בדיוק את זה.'),

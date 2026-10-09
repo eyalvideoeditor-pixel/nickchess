@@ -665,3 +665,19 @@ button, .btn, a { -webkit-tap-highlight-color: transparent; }
 .board-box.fly { transition: transform .26s ease-in; }
 .board-box.back { transition: transform .25s ease-out; }
 .swipe-help { margin-top: 6px; font-weight: 700; color: var(--gold); font-size: .92rem; }
+
+/* ---------- auto-advance after a verdict ---------- */
+.auto-next { position: relative; overflow: hidden; width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,.04);
+  color: inherit; font: inherit; font-weight: 700; padding: 10px 14px; border-radius: 10px; cursor: pointer; text-align: center; }
+.auto-next i { position: absolute; bottom: 0; left: 0; height: 3px; width: 35%; background: var(--gold, #e8b64c); animation: autonext 1.1s ease-in-out infinite; }
+@keyframes autonext { 0% { left: -35%; } 100% { left: 100%; } }
+
+/* ---------- phones: games list rows (name was overlapping the stats) ---------- */
+.gr-main > b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 640px) {
+  .game-row .gr-main { flex: 1 1 calc(100% - 90px); }
+  .game-row .gr-stats { flex-basis: 100%; justify-content: flex-start; }
+}
+@media (max-width: 640px) {
+  .eval-txt { font-size: 7px; letter-spacing: -.3px; }
+}

@@ -1,4 +1,4 @@
-import { h, fill, store, toast } from './util.js';
+import { h, fill, toast, fitOnPhone } from './util.js';
 import { Board } from './board.js';
 import { getQuickEngine } from './engine.js';
 import {
@@ -10,7 +10,6 @@ import { nickSays, textOf, voice } from './nick.js';
 import { recordLine } from './openings-data.js';
 import { maybeQuip, quip } from './quips.js';
 
-const BC_KEY = 'ct_blunder_check';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const colorHe = (c) => (c === 'w' ? 'הלבן' : 'השחור');
 
@@ -38,7 +37,6 @@ export class Session {
     this.items = [...opts.items];
     this.i = 0;
     this.results = [];
-    this.blunderCheck = !!store.get(BC_KEY);
     this.render();
     this.start();
   }
@@ -52,14 +50,8 @@ export class Session {
     this.meta = h('div', { class: 'meta' });
     this.counter = h('span', { class: 'counter' });
     this.timer = h('span', { class: 'timer' });
-    this.confirmBox = h('div', { class: 'confirm hidden' });
-    // Nick says everything the player needs to know: the task, the feedback, the blunder check
-    this.nick = nickSays([this.prompt, this.confirmBox, this.feedback], { className: 'session-nick' });
-    const bcToggle = h('label', { class: 'switch', title: 'אחרי כל מהלך תתבקש לאשר אותו — כמו בדיקת בלנדר בזמן משחק' },
-      h('input', { type: 'checkbox', checked: this.blunderCheck || null, onchange: (e) => {
-        this.blunderCheck = e.target.checked; store.set(BC_KEY, this.blunderCheck);
-      } }),
-      h('span', { class: 'slider' }), ' מצב בדיקת בלנדר');
+    // Nick says everything the player needs to know: the task and the feedback
+    this.nick = nickSays([this.prompt, this.feedback], { className: 'session-nick' });
     fill(this.root,
       h('div', { class: 'session' },
         h('div', { class: 'board-col' }, this.boardBox = h('div', { class: 'board-box', dir: 'ltr' }, boardEl,
@@ -69,8 +61,7 @@ export class Session {
             h('button', { class: 'btn ghost small', onclick: () => this.exit() }, '→ חזרה'),
             h('div', { class: 'side-title' }, h('b', {}, this.opts.title), this.opts.subtitle ? h('small', {}, this.opts.subtitle) : null),
             h('div', { class: 'side-stats' }, this.counter, this.timer)),
-          this.nick, this.actions, this.meta,
-          h('div', { class: 'side-foot' }, bcToggle))));
+          this.nick, this.actions, this.meta)));
     this.board = new Board(boardEl, { onMove: (uci, m) => this._onUserMove(uci, m) });
     this._setupSwipe();
   }
@@ -134,6 +125,7 @@ export class Session {
 
   destroy() {
     clearInterval(this._tick);
+    clearTimeout(this._autoT);
     this._swipeOn = false;
     if (this._keySwipe) document.removeEventListener('keydown', this._keySwipe);
     voice.stop();
@@ -183,7 +175,7 @@ export class Session {
     this.boardBox.classList.toggle('swipe-card', item.kind === 'safe');
     fill(this.feedback, );
     fill(this.meta, );
-    this.confirmBox.classList.add('hidden');
+    clearTimeout(this._autoT);
     this.updateCounter();
     clearInterval(this._tick);
     const t0 = Date.now();
@@ -196,17 +188,46 @@ export class Session {
     else if (item.kind === 'find') this._loadFind(item);
     else if (item.kind === 'safe') this._loadSafe(item);
     else if (item.kind === 'line') this._loadLine(item);
+    fitOnPhone(this.boardBox, this.nick);
   }
 
   setActions(...btns) { fill(this.actions, ...btns.filter(Boolean)); }
 
   btn(label, fn, cls = '') { return h('button', { class: 'btn ' + cls, onclick: fn }, label); }
 
-  nextBtn() {
-    return this.btn('הבא ←', () => this.next(), 'primary');
+  // after a verdict: wait until Nick finished talking (at least minMs), then load the next item by itself.
+  // The little bar can be tapped to skip the wait.
+  _autoNext(minMs = 1800) {
+    const it = this.item;
+    if (!it || this.state.auto) return;
+    this.state.auto = true;
+    const last = this.i + 1 >= this.items.length && !this.opts.loadMore;
+    let gone = false;
+    const go = () => {
+      if (gone || this.item !== it) return;
+      gone = true; clearTimeout(this._autoT);
+      this.next();
+    };
+    this.setActions(h('button', { class: 'auto-next', title: 'לחץ כדי לעבור עכשיו', onclick: go },
+      h('span', {}, last ? 'מסכם את הסבב...' : 'עובר לבא...'), h('i', {})));
+    const t0 = Date.now();
+    const wait = () => {
+      if (this.item !== it) return;
+      const el = Date.now() - t0;
+      if (el >= minMs && (!voice.busy || el > 9000)) return go();
+      this._autoT = setTimeout(wait, 200);
+    };
+    clearTimeout(this._autoT);
+    this._autoT = setTimeout(wait, 200);
   }
 
   async next() {
+    if (this._advancing) return;
+    this._advancing = true;
+    try { await this._next(); } finally { this._advancing = false; }
+  }
+
+  async _next() {
     if (this.i + 1 >= this.items.length) {
       if (this.opts.loadMore) {
         await this._more();
@@ -263,32 +284,9 @@ export class Session {
     else this.nick.setMood(m);
   }
 
-  // ---------- blunder-check confirmation ----------
-  _confirm(san) {
-    return new Promise((resolve) => {
-      this.confirmBox.classList.remove('hidden');
-      fill(this.confirmBox, 
-        h('div', { class: 'confirm-title' }, `🛑 בדיקת בלנדר — ${san}`),
-        h('ul', {},
-          h('li', {}, 'אילו שחים יש ליריב אחרי המהלך?'),
-          h('li', {}, 'אילו אכילות יש לו? מה הכלי שזז הפסיק להגן?'),
-          h('li', {}, 'מה האיום הכי חזק שלו?')),
-        h('div', { class: 'row' },
-          this.btn('אשר מהלך ✓', () => { this.confirmBox.classList.add('hidden'); resolve(true); }, 'primary'),
-          this.btn('בטל', () => { this.confirmBox.classList.add('hidden'); resolve(false); })));
-      this.nick.say(textOf(this.confirmBox), 'warning');
-    });
-  }
-
   async _onUserMove(uci, m) {
     if (this.state.busy || this.state.done) return;
     const before = this._fenBeforeUser;
-    if (this.blunderCheck && this.item.kind !== 'safe' && this.item.kind !== 'line') {
-      this.state.busy = true;
-      const ok = await this._confirm(m.san);
-      this.state.busy = false;
-      if (!ok) { this._resetToUser(); return; }
-    }
     if (this.item.kind === 'puzzle') this._puzzleMove(uci, m, before);
     else if (this.item.kind === 'find' || this.item.kind === 'safe') this._findMove(uci, m, before);
     else if (this.item.kind === 'line') this._lineMove(uci, m);
@@ -348,7 +346,7 @@ export class Session {
     this.state.failed = true; this.state.busy = true;
     this.finish(false);
     this.board.lock();
-    this.setActions(this.nextBtn());
+    this.setActions();
     const sans = [];
     while (this.state.idx < p.moves.length && this.item === p) {
       const m = this.board.play(p.moves[this.state.idx]);
@@ -356,7 +354,9 @@ export class Session {
       this.state.idx++;
       await sleep(650);
     }
-    this.say('הפתרון: ' + sans.join(' '), 'info');
+    if (this.item !== p) return;
+    this.say(h('span', {}, 'הנה הפתרון. ', h('div', { class: 'no-speak', dir: 'ltr' }, sans.join(' '))), 'info');
+    this._autoNext(3000);
   }
 
   async _puzzleMove(uci, m) {
@@ -379,7 +379,7 @@ export class Session {
       this.say(this.state.failed ? 'נפתר (עם עזרה) ✔' : 'מצוין! נפתר ✔', 'good', { mood: this.state.failed ? 'happy' : 'excited' });
       this.finish(!this.state.failed);
       this.board.lock();
-      this.setActions(this.nextBtn());
+      this._autoNext(1600);
       return;
     }
     this.say(`${m.san} ✔ — המשך...`, 'good');
@@ -434,8 +434,8 @@ export class Session {
     this.board.arrows([{ uci: best, brush: 'green' }]);
     const line = pvToSan(this._fenBeforeUser, pv && pv[0] === best ? pv : [best], 6);
     this.say(h('span', {}, 'המהלך הנכון: ', h('b', {}, line[0] || sanOf(this._fenBeforeUser, best)),
-      line.length > 1 ? h('div', { class: 'muted' }, 'ההמשך: ' + line.join(' ')) : null), 'info');
-    this.setActions(this.nextBtn());
+      line.length > 1 ? h('div', { class: 'muted no-speak' }, 'ההמשך: ' + line.join(' ')) : null), 'info');
+    this._autoNext(3500);
   }
 
   async _findMove(uci, m, fenBefore) {
@@ -486,9 +486,9 @@ export class Session {
       ? (this.state.failed ? 'נכון ✔ (בניסיון חוזר)' : 'מצוין! בדיוק המהלך של המנוע ✔')
       : `גם ${m.san} מהלך טוב ✔` + (cpW !== undefined ? ` (${formatEval(cpW)})` : '');
     this.say(h('span', {}, text,
-      line.length ? h('div', { class: 'muted' }, 'קו המנוע: ' + line.join(' ')) : null), 'good');
+      line.length ? h('div', { class: 'muted no-speak' }, 'קו המנוע: ' + line.join(' ')) : null), 'good');
     this.finish(!this.state.failed);
-    this.setActions(this.nextBtn());
+    this._autoNext(2200);
   }
 
   // ---------- "safe or blunder?" ----------
@@ -520,17 +520,17 @@ export class Session {
     if (!it.unsafe) {
       this.say(correct ? 'נכון — המהלך הזה בטוח ✔' : 'בעצם המהלך הזה בטוח. לא כל מהלך הוא מלכודת 🙂', correct ? 'good' : 'bad');
       this.finish(correct);
-      this.setActions(this.nextBtn());
+      this._autoNext(correct ? 1300 : 2200);
       return;
     }
     if (!correct) {
       const line = pvToSan(this.board.fen(), it.refutationPv && it.refutationPv[0] === it.refutation ? it.refutationPv : [it.refutation], 5);
       this.board.arrows([{ uci: it.refutation, brush: 'red' }]);
       this.say(h('span', { class: 'shock' }, '💥 זה בלנדר! היריב משחק ', h('b', {}, line[0]),
-        line.length > 1 ? h('div', { class: 'muted' }, line.join(' ')) : null,
+        line.length > 1 ? h('div', { class: 'muted no-speak' }, line.join(' ')) : null,
         it.bestSan ? h('div', {}, 'עדיף היה: ', h('b', {}, it.bestSan)) : null), 'bad', { mood: 'shocked' });
       this.finish(false);
-      this.setActions(this.nextBtn());
+      this._autoNext(3500);
       return;
     }
     // correct "blunder" call counts as a success; finding the refutation is the bonus round
@@ -627,9 +627,8 @@ export class Session {
     const clean = !this.state.failed;
     this.say(`${text} ${clean ? 'סיימת את הקו בלי טעויות! 🎉' : 'סיימת את הקו. בפעם הבאה — בלי עזרה!'}`, clean ? 'good' : 'info', { mood: clean ? 'excited' : 'proud' });
     this.finish(clean);
-    this.setActions(this.nextBtn());
+    this._autoNext(2000);
   }
 }
 
-export function blunderCheckOn() { return !!store.get(BC_KEY); }
 export { progress };

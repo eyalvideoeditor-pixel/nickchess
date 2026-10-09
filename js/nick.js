@@ -125,6 +125,8 @@ export const voice = {
   set enabled(on) { store.set(VOICE_KEY, !!on); if (!on) this.stop(); window.dispatchEvent(new Event('ct-voice-toggle')); },
   get voiceName() { const c = choice(); return c ? c.label : null; },
   get voiceId() { const c = choice(); return c ? c.id : null; },
+  // true while Nick is still talking (used to wait before moving on)
+  get busy() { return !!playing.audio || !!(synth && (synth.speaking || synth.pending)); },
   setVoice(id) { store.set(VOICE_NAME_KEY, id); },
   stop() {
     playing.token++;
@@ -164,8 +166,11 @@ function speakNeural(text, id, m, avatarEl) {
     playing.audio = a;
     a.onplaying = () => talk(avatarEl, true);
     a.onended = () => next(i + 1);
-    a.onerror = () => { if (i === 0) speakBrowserFallback(text, m, avatarEl); else next(i + 1); };
-    a.play().catch(() => { talk(avatarEl, false); });
+    a.onerror = () => {
+      if (token !== playing.token) return;
+      if (i === 0) { playing.audio = null; speakBrowserFallback(text, m, avatarEl); } else next(i + 1);
+    };
+    a.play().catch(() => { if (token === playing.token) playing.audio = null; talk(avatarEl, false); });
   };
   next(0);
 }

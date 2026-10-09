@@ -1,6 +1,6 @@
 // Game review: every move of both players gets a chess.com-style rating (with our own names)
 // and a short comment explaining it.
-import { h, fill, store, fmtDate, toast } from './util.js';
+import { h, fill, store, fmtDate, toast, fitOnPhone } from './util.js';
 import { Board } from './board.js';
 import { getEngine } from './engine.js';
 import {
@@ -506,19 +506,22 @@ async function prepareVoice(v, g) {
   const items = [{ text: INTRO_LINE, mood: 'happy' }, ...g.spoken.map((text, i) => ({ text, mood: REVIEW_MOOD[g.plies[i].rv.cls] || 'calm' }))];
   const bar = h('div', {});
   const txt = h('span', {}, 'ניק מתכונן...');
-  let skipped = false;
+  let skip;
+  const skipped = new Promise((r) => { skip = r; });
   const box = h('div', { class: 'card center review-progress' },
     h('img', { class: 'nick-full prep-nick', src: 'assets/nick-m-curious-full.webp', alt: 'ניק' }),
     h('h2', {}, 'ניק מכין את ההערות שלו'),
     h('p', { class: 'muted' }, 'הוא מקליט מראש מה הוא יגיד על כל מהלך — ככה הוא יענה מיד.'),
     h('div', { class: 'progress' }, h('div', { class: 'progress-text' }, txt), h('div', { class: 'bar' }, bar)),
-    h('button', { class: 'btn ghost small', onclick: () => { skipped = true; } }, 'דלג'));
+    h('button', { class: 'btn ghost small', onclick: () => skip() }, 'דלג'));
   let shown = false;
   const timer = setTimeout(() => { shown = true; fill(v, box); }, 250); // no flash when everything is ready already
-  await prefetchSpeech(items, (d, n) => {
+  // "skip" opens the review right away; the remaining lines keep downloading in the background
+  const route = '#/review/' + encodeURIComponent(g.id);
+  await Promise.race([skipped, prefetchSpeech(items, (d, n) => {
     txt.textContent = `${d} / ${n} משפטים`;
     bar.style.width = (d / Math.max(n, 1) * 100).toFixed(1) + '%';
-  }, () => skipped || !location.hash.startsWith('#/review/'));
+  }, () => !location.hash.startsWith(route))]);
   clearTimeout(timer);
   return shown;
 }
@@ -579,7 +582,14 @@ function drawGame(v, g, ctx, startPly) {
     badge.textContent = R.sym;
   }
 
+  let shownOnce = false;
   function show(k, speak = true) {
+    _show(k, speak);
+    if (shownOnce) fitOnPhone(boardEl.closest('.board-with-eval'), coach);
+    shownOnce = true;
+  }
+
+  function _show(k, speak = true) {
     cur = Math.max(0, Math.min(n, k));
     // remember the move in the URL (so coming back from a drill lands on the same move)
     history.replaceState(null, '', `#/review/${encodeURIComponent(g.id)}/${cur}`);
@@ -687,9 +697,9 @@ function drawGame(v, g, ctx, startPly) {
   fill(v,
     h('div', { class: 'page-head row-between' },
       h('div', {},
-        h('h2', {}, h('bdi', {}, W.name), W.rating ? h('span', { class: 'muted' }, ` (${W.rating})`) : null,
-          ' – ', h('bdi', {}, B.name), B.rating ? h('span', { class: 'muted' }, ` (${B.rating})`) : null,
-          h('span', { class: 'chip' }, resultText(g))),
+        h('h2', {}, h('span', { dir: 'ltr' }, h('bdi', {}, W.name), W.rating ? h('span', { class: 'muted' }, ` (${W.rating})`) : null,
+          ' – ', h('bdi', {}, B.name), B.rating ? h('span', { class: 'muted' }, ` (${B.rating})`) : null), ' ',
+          h('span', { class: 'chip', dir: 'ltr' }, resultText(g))),
         h('div', { class: 'muted small' }, g.endTime ? fmtDate(g.endTime) : '', g.opening ? ' · ' : '', g.opening ? h('bdi', {}, g.opening) : null)),
       h('div', { class: 'row' },
         drillSides.map((s) => h('button', { class: 'btn' + (known ? ' primary' : ''), onclick: () => ctx.startSession({

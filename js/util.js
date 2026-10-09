@@ -49,3 +49,11 @@ export function toast(msg, ms = 2600) {
   requestAnimationFrame(() => t.classList.add('show'));
   setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, ms);
 }
+
+// Phones: after stepping through a game, keep the board and Nick's comment on screen together
+// (scroll so the board's top is at the top of the screen, if part of them is hidden).
+export function fitOnPhone(topEl, bottomEl) {
+  if (innerWidth > 640 || !topEl || !bottomEl || !topEl.isConnected) return;
+  const t = topEl.getBoundingClientRect(), b = bottomEl.getBoundingClientRect();
+  if (t.top < 0 || b.top + 150 > innerHeight) window.scrollBy({ top: t.top - 8, behavior: 'smooth' });
+}
