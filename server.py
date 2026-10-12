@@ -6,6 +6,8 @@ Run:  python server.py   (then open http://localhost:8765)
 import hashlib
 import http.server
 import json
+import queue
+import ssl
 import mimetypes
 import os
 import re
@@ -28,6 +30,11 @@ except ImportError:  # chat is optional; everything else works without it
 
 try:
     import edge_tts  # Microsoft's neural voices (the ones Edge reads aloud with) - free, no key
+    import edge_tts.communicate
+    # Since October 2026 Microsoft's old speech host answers 403; Edge now speaks through
+    # api.msedgeservices.com, which takes the same public token (see rany2/edge-tts PR #491)
+    edge_tts.communicate.WSS_URL = ("wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1"
+                                    f"?Ocp-Apim-Subscription-Key={edge_tts.constants.TRUSTED_CLIENT_TOKEN}")
 except ImportError:
     edge_tts = None
 
@@ -285,6 +292,23 @@ def clean_messages(raw):
 # ---------------- Nick's voice ----------------
 
 TTS_VOICES = {"he-IL-AvriNeural", "he-IL-HilaNeural"}
+# Can this server reach Microsoft's voice service? (/api/tts/diag)
+def tts_diag():
+    out = {"edge_tts": edge_tts is not None}
+    host = "speech.platform.bing.com"
+    t0 = time.time()
+    try:
+        out["dns"] = sorted({a[4][0] for a in socket.getaddrinfo(host, 443)})[:4]
+        with socket.create_connection((host, 443), timeout=8) as sock:
+            out["connect_ms"] = int((time.time() - t0) * 1000)
+            with ssl.create_default_context().wrap_socket(sock, server_hostname=host) as tls:
+                out["tls_ms"] = int((time.time() - t0) * 1000)
+                out["tls"] = tls.version()
+    except Exception as e:  # noqa: BLE001
+        out["error"] = repr(e)[:200]
+    return out
+
+
 TTS_CACHE = os.path.join(ROOT, ".tts-cache")
 RATE = re.compile(r"^[+-]\d{1,2}%$")
 PITCH = re.compile(r"^[+-]\d{1,2}Hz$")
@@ -311,6 +335,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.send_json(200, chat_status())
         if self.path == "/api/chat/diag":
             return self.send_json(200, gemini_diag())
+        if self.path == "/api/tts/diag":
+            return self.send_json(200, tts_diag())
         if self.path == "/api/tts/status":
             return self.send_json(200, {"ok": edge_tts is not None, "voices": sorted(TTS_VOICES)})
         if self.path.startswith("/api/tts?"):
@@ -475,22 +501,42 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(data)
             return
         audio = bytearray()
+        # edge-tts runs in its own thread with hard deadlines: when Microsoft does not answer,
+        # the browser gets an error quickly and falls back to its own voice instead of waiting forever
+        chunks = queue.Queue()
+
+        def produce():
+            try:
+                for c in edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch,
+                                              connect_timeout=8, receive_timeout=15).stream_sync():
+                    if c.get("type") == "audio":
+                        chunks.put(c["data"])
+                chunks.put(None)
+            except Exception as e:  # noqa: BLE001
+                chunks.put(e)
+
+        threading.Thread(target=produce, daemon=True).start()
         try:
-            for chunk in edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch, connect_timeout=8, receive_timeout=15).stream_sync():
-                if chunk.get("type") != "audio":
-                    continue
+            while True:
+                try:
+                    data = chunks.get(timeout=12 if not audio else 20)
+                except queue.Empty:
+                    data = TimeoutError("tts timeout")
+                if data is None:
+                    break
+                if isinstance(data, Exception):
+                    print("tts failed:", repr(data)[:200], flush=True)
+                    if not audio:
+                        return self.send_error(502)
+                    return
                 if not audio:
                     self.send_response(200)
                     self.send_header("Content-Type", "audio/mpeg")
                     self.end_headers()
-                audio += chunk["data"]
-                self.wfile.write(chunk["data"])
+                audio += data
+                self.wfile.write(data)
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
-            return
-        except Exception:
-            if not audio:
-                return self.send_error(502)
             return
         if not audio:
             return self.send_error(502)
