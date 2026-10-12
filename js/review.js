@@ -518,7 +518,17 @@ async function prepareVoice(v, g) {
   const timer = setTimeout(() => { shown = true; fill(v, box); }, 250); // no flash when everything is ready already
   // "skip" opens the review right away; the remaining lines keep downloading in the background
   const route = '#/review/' + encodeURIComponent(g.id);
-  await Promise.race([skipped, prefetchSpeech(items, (d, n) => {
+  // never get stuck here: open the review when nothing arrived for 8s, or after 40s in total
+  let lastStep = Date.now();
+  const t0 = Date.now();
+  const stalled = new Promise((r) => {
+    const iv = setInterval(() => {
+      if (Date.now() - lastStep > 8000 || Date.now() - t0 > 40000) { clearInterval(iv); r(); }
+    }, 500);
+    skipped.then(() => clearInterval(iv));
+  });
+  await Promise.race([skipped, stalled, prefetchSpeech(items, (d, n) => {
+    lastStep = Date.now();
     txt.textContent = `${d} / ${n} משפטים`;
     bar.style.width = (d / Math.max(n, 1) * 100).toFixed(1) + '%';
   }, () => !location.hash.startsWith(route))]);

@@ -106,10 +106,13 @@ export async function prefetchSpeech(items, onStep, isCancelled = () => false) {
   const worker = async () => {
     while (next < todo.length && !isCancelled()) {
       const u = todo[next++];
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 15000); // a stuck line must not hold up the rest
       try {
-        const r = await fetch(u);
+        const r = await fetch(u, { signal: ctl.signal });
         if (r.ok) audioCache.set(u, URL.createObjectURL(await r.blob()));
       } catch { /* that line will stream live instead */ }
+      clearTimeout(t);
       done++;
       if (onStep) onStep(done, urls.length);
     }
