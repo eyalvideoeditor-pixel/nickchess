@@ -476,7 +476,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
         audio = bytearray()
         try:
-            for chunk in edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch).stream_sync():
+            for chunk in edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch, connect_timeout=8, receive_timeout=15).stream_sync():
                 if chunk.get("type") != "audio":
                     continue
                 if not audio:
